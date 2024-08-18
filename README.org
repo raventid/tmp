@@ -1,17 +1,31 @@
 #+title: Readme
+* Quick start
+To run the application you will need a rust environment installed on your computer. I suggest to use an official installation guide https://www.rust-lang.org/tools/install.
 
-OrderBook datastructure. In this implementationt multiple options have been considered. Vector for bids and asks with addtional tree index. Pure vector. Two b-trees for bids and asks. I went with the simplest implementation based on 2 b-trees as a compromise betweeen execution speed / implementation time / complexity.
+After setting up the environment we can run the application itself. Binance open websocket API is used, so we will not configure private access tokens.
 
-Arithmetic. To simplify implementation and move quickly with it I use u64 for internal represantation and f64 for external API. u64 allows simpler integral arithmetic without concerning ourselves with possible acculated errors in floating point arithmetic. Though it creates a possiblity of introducing additional conversation error I considered it to be optimal for POC implementation. For a real one I would invest more time to do a proper lossless decimal arithmetic.
+There are not many settings available for the application. Refer to the main.rs file. You can change INSTRUMENT and LEVELS (for a PARTIAL DEPTH stream).
 
-For websocket connection to binance I use rust crate with binance api implementation. It saves a lot of boilerplate and provides convenient API on top of the tokio runtime. To fine tune performance or resilience (like reconnecting sockets) it makes sense to hand-write everything from scratch, but due to the lack of time I go on compromise.
+#+begin_src shell
+const INSTRUMENT: &str = "ETHUSDC";
+const LEVELS: u16 = 20;
+#+end_src
 
-To run binance websocket connector and orderbook:
+To run binance websocket connector and orderbook updates with logging information use the command below:
 #+begin_src shell
 RUST_LOG="debug" cargo run
 #+end_src
 
-To run tests:
+To run unit tests:
 #+begin_src shell
 cargo test
 #+end_src
+
+* General notes and comments
+OrderBook datastructure. In this implementationt multiple options have been considered. Vector for bids and asks with addtional tree index. Pure vector. Two b-trees for bids and asks. I went with the simplest implementation based on 2 b-trees as a compromise betweeen execution speed / implementation time / complexity.
+
+Arithmetic. To simplify implementation and move quickly with it I use u64 for internal represantation and f64 for external API. u64 allows simpler integral arithmetic without concerning ourselves with possible acculated errors in floating point arithmetic. Though it creates a possiblity of introducing additional conversation error I considered it to be optimal for POC implementation. For a real one I would invest more time to do a proper lossless decimal arithmetic.
+
+
+For websocket connection to binance I use rust crate with binance api implementation. It saves a lot of boilerplate and provides convenient API on top of the tokio runtime. To fine tune performance or resilience (like reconnecting sockets) it makes sense to hand-write everything from scratch, but due to the lack of time I go on compromise.
+

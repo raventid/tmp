@@ -139,6 +139,9 @@ dependencies = [
  "env_logger",
  "futures-util",
  "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "tokio",
 ]
 
