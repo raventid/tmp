@@ -3,3 +3,5 @@
 OrderBook datastructure. In this implementationt multiple options have been considered. Vector for bids and asks with addtional tree index. Pure vector. Two b-trees for bids and asks. I went with the simplest implementation based on 2 b-trees as a compromise betweeen execution speed / implementation time / complexity.
 
 Arithmetic. To simplify implementation and move quickly with it I use u64 for internal represantation and f64 for external API. u64 allows simpler integral arithmetic without concerning ourselves with possible acculated errors in floating point arithmetic. Though it creates a possiblity of introducing additional conversation error I considered it to be optimal for POC implementation. For a real one I would invest more time to do a proper lossless decimal arithmetic.
+
+For websocket connection to binance I use rust crate with binance api implementation. It saves a lot of boilerplate and provides convenient API on top of the tokio runtime. To fine tune performance or resilience (like reconnecting sockets) it makes sense to hand-write everything from scratch, but due to the lack of time I go on compromise.
