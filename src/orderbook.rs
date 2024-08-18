@@ -1,101 +1,5 @@
+use crate::binance_payloads;
 use std::collections::BTreeMap;
-use serde::{Deserialize, Deserializer, Serialize};
-
-// Transport types to work with Binance API
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BookTickerUpdateEnvelope {
-    stream: String,
-    data: BookTickerUpdate,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BookTickerUpdate {
-    #[serde(rename = "u")]
-    pub update_id: u64,
-    #[serde(rename = "s")]
-    pub symbol: String,
-    #[serde(rename = "b", deserialize_with = "deserialize_string_to_f64")]
-    pub best_bid_price: f64,
-    #[serde(rename = "B", deserialize_with = "deserialize_string_to_f64")]
-    pub best_bid_quantity: f64,
-    #[serde(rename = "a", deserialize_with = "deserialize_string_to_f64")]
-    pub best_ask_price: f64,
-    #[serde(rename = "A", deserialize_with = "deserialize_string_to_f64")]
-    pub best_ask_quantity: f64,
-}
-// pub struct BookTickerUpdate {
-//     #[serde(rename = "e")]
-//     event_type: String,
-//     #[serde(rename = "E")]
-//     event_time: u64,
-//     #[serde(rename = "u")]
-//     pub update_id: u64,
-//     #[serde(rename = "s")]
-//     pub symbol: String,
-//     #[serde(rename = "b", deserialize_with = "deserialize_string_to_f64")]
-//     pub best_bid_price: f64,
-//     #[serde(rename = "B", deserialize_with = "deserialize_string_to_f64")]
-//     pub best_bid_quantity: f64,
-//     #[serde(rename = "a", deserialize_with = "deserialize_string_to_f64")]
-//     pub best_ask_price: f64,
-//     #[serde(rename = "A", deserialize_with = "deserialize_string_to_f64")]
-//     pub best_ask_quantity: f64,
-// }
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct BookTickerUpdate {
-//     #[serde(rename = "u")]
-//     pub update_id: u64,
-//     #[serde(rename = "s")]
-//     pub symbol: String,
-//     #[serde(rename = "b")]
-//     pub best_bid_price: f64,
-//     #[serde(rename = "B")]
-//     pub best_bid_quantity: f64,
-//     #[serde(rename = "a")]
-//     pub best_ask_price: f64,
-//     #[serde(rename = "A")]
-//     pub best_ask_quantity: f64,
-// }
-
-#[derive(Debug, Deserialize)]
-pub struct DepthUpdateEnvelope {
-    stream: String,
-    data: DepthUpdate,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DepthUpdate {
-    #[serde(rename = "lastUpdateId")]
-    pub last_update_id: u64,
-    #[serde(rename = "bids", deserialize_with = "deserialize_string_tuple_vec")]
-    pub bids: Vec<(f64, f64)>,
-    #[serde(rename = "asks", deserialize_with = "deserialize_string_tuple_vec")]
-    pub asks: Vec<(f64, f64)>,
-}
-
-fn deserialize_string_tuple_vec<'de, D>(deserializer: D) -> Result<Vec<(f64, f64)>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let string_tuple_vec: Vec<(String, String)> = Vec::deserialize(deserializer)?;
-    string_tuple_vec
-        .into_iter()
-        .map(|(s1, s2)| {
-            let v1 = s1.parse().map_err(serde::de::Error::custom)?;
-            let v2 = s2.parse().map_err(serde::de::Error::custom)?;
-            Ok((v1, v2))
-        })
-        .collect()
-}
-
-fn deserialize_string_to_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    s.parse().map_err(serde::de::Error::custom)
-}
 
 // Binance orderbook implementation
 type Price = u64;
@@ -112,7 +16,9 @@ impl ToU64 for f64 {
     }
 }
 
+#[derive(Debug)]
 pub struct OrderBook {
+    #[allow(dead_code)]
     symbol: String,
     bids: BTreeMap<Price, Quantity>,
     asks: BTreeMap<Price, Quantity>,
@@ -120,7 +26,7 @@ pub struct OrderBook {
 }
 
 impl OrderBook {
-    fn new(symbol: String) -> OrderBook {
+    pub fn new(symbol: String) -> OrderBook {
         OrderBook {
             symbol,
             bids: BTreeMap::new(),
@@ -129,14 +35,18 @@ impl OrderBook {
         }
     }
 
-    fn update_book_ticker(&mut self, data: &BookTickerUpdate) {
-        self.bids
-            .insert(data.best_bid_price.to_u64() as Price, data.best_bid_quantity.to_u64() as Quantity);
-        self.asks
-            .insert(data.best_ask_price.to_u64() as Price, data.best_ask_quantity.to_u64() as Quantity);
+    pub fn update_book_ticker(&mut self, data: &binance_payloads::BookTickerUpdate) {
+        self.bids.insert(
+            data.best_bid_price.to_u64() as Price,
+            data.best_bid_quantity.to_u64() as Quantity,
+        );
+        self.asks.insert(
+            data.best_ask_price.to_u64() as Price,
+            data.best_ask_quantity.to_u64() as Quantity,
+        );
     }
 
-    fn update_depth(&mut self, data: &DepthUpdate) {
+    pub fn update_depth(&mut self, data: &binance_payloads::DepthUpdate) {
         if data.last_update_id <= self.last_update_id {
             return;
         }
@@ -165,12 +75,17 @@ impl OrderBook {
     }
 
     // TODO: Use better types ((BID_PRICE, BID_QUANTITY), (ASK_PRICE, ASK_QUANTITY))
+    #[allow(dead_code)]
     fn get_best_bid_ask(&self) -> Option<((f64, f64), (f64, f64))> {
         if self.bids.is_empty() || self.asks.is_empty() {
             None
         } else {
-            let best_bid = self.bids.iter().next_back().unwrap();
-            let best_ask = self.asks.iter().next().unwrap();
+            let best_bid = self
+                .bids
+                .iter()
+                .next_back()
+                .expect("bids should not be empty");
+            let best_ask = self.asks.iter().next().expect("asks should not be empty");
 
             Some((
                 (*best_bid.0 as f64 / 10000.0, *best_bid.1 as f64 / 10000.0),
@@ -179,6 +94,7 @@ impl OrderBook {
         }
     }
 
+    #[allow(dead_code)]
     fn get_volume_at_price(&self, price: f64) -> f64 {
         let price_u64 = price.to_u64() as Price;
         (self.bids.get(&price_u64).unwrap_or(&0) + self.asks.get(&price_u64).unwrap_or(&0)) as f64
@@ -189,11 +105,11 @@ impl OrderBook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde;
+    use crate::binance_payloads;
 
     #[test]
     fn test_book_ticker_update_serde() {
-        let update = BookTickerUpdate {
+        let update = binance_payloads::BookTickerUpdate {
             update_id: 123456789,
             symbol: "BTCUSDT".to_string(),
             best_bid_price: 50000.0,
@@ -206,20 +122,27 @@ mod tests {
         let json = serde_json::to_string(&update).unwrap();
 
         // Deserialize the JSON back into a BookTickerUpdate
-        let deserialized_update: BookTickerUpdate = serde_json::from_str(&json).unwrap();
+        let deserialized_update: binance_payloads::BookTickerUpdate =
+            serde_json::from_str(&json).unwrap();
 
         // Assert that the deserialized update matches the original update
         assert_eq!(update.update_id, deserialized_update.update_id);
         assert_eq!(update.symbol, deserialized_update.symbol);
         assert_eq!(update.best_bid_price, deserialized_update.best_bid_price);
-        assert_eq!(update.best_bid_quantity, deserialized_update.best_bid_quantity);
+        assert_eq!(
+            update.best_bid_quantity,
+            deserialized_update.best_bid_quantity
+        );
         assert_eq!(update.best_ask_price, deserialized_update.best_ask_price);
-        assert_eq!(update.best_ask_quantity, deserialized_update.best_ask_quantity);
+        assert_eq!(
+            update.best_ask_quantity,
+            deserialized_update.best_ask_quantity
+        );
     }
 
     #[test]
     fn test_depth_update_serde() {
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 987654321,
             bids: vec![(50000.0, 0.5), (49900.0, 1.2)],
             asks: vec![(50100.0, 0.3), (50200.0, 0.8)],
@@ -229,10 +152,14 @@ mod tests {
         let json = serde_json::to_string(&depth_update).unwrap();
 
         // Deserialize the JSON back into a DepthUpdate
-        let deserialized_update: DepthUpdate = serde_json::from_str(&json).unwrap();
+        let deserialized_update: binance_payloads::DepthUpdate =
+            serde_json::from_str(&json).unwrap();
 
         // Assert that the deserialized update matches the original update
-        assert_eq!(depth_update.last_update_id, deserialized_update.last_update_id);
+        assert_eq!(
+            depth_update.last_update_id,
+            deserialized_update.last_update_id
+        );
         assert_eq!(depth_update.bids, deserialized_update.bids);
         assert_eq!(depth_update.asks, deserialized_update.asks);
     }
@@ -249,7 +176,7 @@ mod tests {
     #[test]
     fn test_update_book_ticker() {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-        let book_ticker_update = BookTickerUpdate {
+        let book_ticker_update = binance_payloads::BookTickerUpdate {
             update_id: 400900217,
             symbol: "BNBUSDT".to_string(),
             best_bid_price: 25.3519,
@@ -267,7 +194,7 @@ mod tests {
     #[test]
     fn test_update_depth() {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 160,
             bids: vec![(0.0024, 10.0), (0.0025, 20.0)],
             asks: vec![(0.0026, 100.0), (0.0027, 200.0)],
@@ -286,7 +213,7 @@ mod tests {
     fn test_update_depth_with_older_update_id() {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
         orderbook.last_update_id = 200;
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 150,
             bids: vec![(0.0024, 10.0)],
             asks: vec![(0.0026, 100.0)],
@@ -300,7 +227,7 @@ mod tests {
     #[test]
     fn test_update_depth_with_zero_quantity() {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 160,
             bids: vec![(0.0024, 10.0), (0.0025, 0.0)],
             asks: vec![(0.0026, 0.0), (0.0027, 200.0)],
@@ -319,7 +246,7 @@ mod tests {
     #[test]
     fn test_get_best_bid_ask() {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 160,
             bids: vec![(0.0024, 10.0), (0.0025, 20.0)],
             asks: vec![(0.0026, 100.0), (0.0027, 200.0)],
@@ -339,7 +266,7 @@ mod tests {
     #[test]
     fn test_get_volume_at_price() {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 160,
             bids: vec![(0.0024, 10.0), (0.0025, 20.0)],
             asks: vec![(0.0024, 100.0), (0.0027, 200.0)],
@@ -357,7 +284,7 @@ mod tests {
         let mut orderbook = OrderBook::new("BNBUSDT".to_string());
 
         // Update with Book Ticker data
-        let book_ticker_update = BookTickerUpdate {
+        let book_ticker_update = binance_payloads::BookTickerUpdate {
             update_id: 400900217,
             symbol: "BNBUSDT".to_string(),
             best_bid_price: 25.3519,
@@ -368,7 +295,7 @@ mod tests {
         orderbook.update_book_ticker(&book_ticker_update);
 
         // Update with Partial Book Depth data
-        let depth_update = DepthUpdate {
+        let depth_update = binance_payloads::DepthUpdate {
             last_update_id: 160,
             bids: vec![(0.0024, 10.0)],
             asks: vec![(0.0026, 100.0)],

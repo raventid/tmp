@@ -2,18 +2,23 @@
 * Quick start
 To run the application you will need a rust environment installed on your computer. I suggest to use an official installation guide https://www.rust-lang.org/tools/install.
 
-After setting up the environment we can run the application itself. Binance open websocket API is used, so we will not configure private access tokens.
+After setting up the environment we can run the application itself. We are using Binance open websocket API, so there is not need to configure private access tokens.
 
-There are not many settings available for the application. Refer to the main.rs file. You can change INSTRUMENT and LEVELS (for a PARTIAL DEPTH stream).
+There are not many settings available for the application. Refer to the `main.rs` file. You can change `INSTRUMENT` and `LEVELS` (for a partial_depth_update stream).
 
 #+begin_src shell
 const INSTRUMENT: &str = "ETHUSDC";
 const LEVELS: u16 = 20;
 #+end_src
 
-To run binance websocket connector and orderbook updates with logging information use the command below:
+To run Binance websocket connector and orderbook updates with the most extensive logging information available - use the command below:
 #+begin_src shell
 RUST_LOG="debug" cargo run
+#+end_src
+
+To minimize logging information to OrderBook internal state - use:
+#+begin_src shell
+RUST_LOG="info" cargo run
 #+end_src
 
 To run unit tests:
@@ -22,10 +27,15 @@ cargo test
 #+end_src
 
 * General notes and comments
-OrderBook datastructure. In this implementationt multiple options have been considered. Vector for bids and asks with addtional tree index. Pure vector. Two b-trees for bids and asks. I went with the simplest implementation based on 2 b-trees as a compromise betweeen execution speed / implementation time / complexity.
+OrderBook Data Structure:
+In this implementation, multiple options have been considered, including:
+- Vector for bids and asks with an additional tree index
+- Pure vector
+- Two B-Trees for bids and asks
+I chose the simplest implementation based on two B-Trees as a compromise between execution speed, implementation time, and complexity.
 
-Arithmetic. To simplify implementation and move quickly with it I use u64 for internal represantation and f64 for external API. u64 allows simpler integral arithmetic without concerning ourselves with possible acculated errors in floating point arithmetic. Though it creates a possiblity of introducing additional conversation error I considered it to be optimal for POC implementation. For a real one I would invest more time to do a proper lossless decimal arithmetic.
+Arithmetic:
+To simplify the implementation and move quickly, I use u64 for internal representation and f64 for the external API. Using u64 allows for simpler integral arithmetic without concerning ourselves with possible accumulated errors in floating-point arithmetic. Although it creates the possibility of introducing additional conversion errors, I considered it optimal for a POC (Proof of Concept) implementation. For a real implementation, I would invest more time to perform proper lossless decimal arithmetic.
 
-
-For websocket connection to binance I use rust crate with binance api implementation. It saves a lot of boilerplate and provides convenient API on top of the tokio runtime. To fine tune performance or resilience (like reconnecting sockets) it makes sense to hand-write everything from scratch, but due to the lack of time I go on compromise.
-
+Websocket Connection:
+For the websocket connection to Binance, I use a Rust crate with Binance API implementation. It saves some boilerplate code and provides a convenient API on top of the Tokio runtime. To fine-tune performance or resilience (like reconnecting sockets, managing timeouts and network issues), it makes sense to hand-write everything from scratch, but due to time constraints, I opted for a compromise.

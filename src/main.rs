@@ -1,11 +1,11 @@
 use binance_spot_connector_rust::{
-    market_stream::partial_depth::PartialDepthStream,
-    market_stream::book_ticker::BookTickerStream,
+    market_stream::book_ticker::BookTickerStream, market_stream::partial_depth::PartialDepthStream,
     tokio_tungstenite::BinanceWebSocketClient,
 };
 use env_logger::Builder;
 use futures_util::StreamExt;
 
+mod binance_payloads;
 mod orderbook;
 
 const INSTRUMENT: &str = "ETHUSDC";
@@ -14,6 +14,8 @@ const LEVELS: u16 = 20;
 #[tokio::main]
 async fn main() {
     Builder::from_default_env().init();
+
+    let mut orderbook = orderbook::OrderBook::new(INSTRUMENT.to_string());
 
     // Establish connection
     let (mut conn, _) = BinanceWebSocketClient::connect_async_default()
@@ -32,14 +34,16 @@ async fn main() {
         match message {
             Ok(message) => {
                 let binary_data = message.into_data();
-                let data = std::str::from_utf8(&binary_data).expect("Failed to parse message");
-                log::debug!("{:?}", data);
-                handle(data);
+                let payload = std::str::from_utf8(&binary_data).expect("Failed to parse message");
+                log::debug!("{:?}", payload);
+
+                handle_payload(payload, &mut orderbook);
+                log::info!("{:?}", orderbook);
             }
             Err(_) => {
                 log::error!("Broken message received from the socket, stopping execution");
-                break
-            },
+                break;
+            }
         }
     }
 
@@ -47,18 +51,19 @@ async fn main() {
     conn.close().await.expect("Failed to disconnect");
 }
 
-fn handle(message: &str) {
-    match serde_json::from_str::<orderbook::DepthUpdateEnvelope>(message) {
+fn handle_payload(payload: &str, orderbook: &mut orderbook::OrderBook) {
+    match serde_json::from_str::<binance_payloads::DepthUpdateEnvelope>(payload) {
         Ok(depth_update) => {
             log::debug!("{:?}", depth_update);
-        },
-        Err(_) =>  {
-            match serde_json::from_str::<orderbook::BookTickerUpdateEnvelope>(message) {
-                Ok(book_ticker_update) => {
-                    log::debug!("{:?}", book_ticker_update);
-                },
-                Err(_) => log::error!("Unrecognized websocket message"),
-            }
+            orderbook.update_depth(&depth_update.data);
         }
+        Err(_) => match serde_json::from_str::<binance_payloads::BookTickerUpdateEnvelope>(payload)
+        {
+            Ok(book_ticker_update) => {
+                log::debug!("{:?}", book_ticker_update);
+                orderbook.update_book_ticker(&book_ticker_update.data);
+            }
+            Err(_) => log::error!("Unrecognized websocket message"),
+        },
     };
 }
