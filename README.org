@@ -5,3 +5,13 @@ OrderBook datastructure. In this implementationt multiple options have been cons
 Arithmetic. To simplify implementation and move quickly with it I use u64 for internal represantation and f64 for external API. u64 allows simpler integral arithmetic without concerning ourselves with possible acculated errors in floating point arithmetic. Though it creates a possiblity of introducing additional conversation error I considered it to be optimal for POC implementation. For a real one I would invest more time to do a proper lossless decimal arithmetic.
 
 For websocket connection to binance I use rust crate with binance api implementation. It saves a lot of boilerplate and provides convenient API on top of the tokio runtime. To fine tune performance or resilience (like reconnecting sockets) it makes sense to hand-write everything from scratch, but due to the lack of time I go on compromise.
+
+To run binance websocket connector and orderbook:
+#+begin_src shell
+RUST_LOG="debug" cargo run
+#+end_src
+
+To run tests:
+#+begin_src shell
+cargo test
+#+end_src
