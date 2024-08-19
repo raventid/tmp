@@ -51,6 +51,8 @@ async fn main() {
     conn.close().await.expect("Failed to disconnect");
 }
 
+// EXTENSION: It should be easy to create multiplexed stream with subscription on different pairs and handle here,
+// by extending DepthUpdateEnvelope struct to understand what stream it is operating on.
 fn handle_payload(payload: &str, orderbook: &mut orderbook::OrderBook) {
     match serde_json::from_str::<binance_payloads::DepthUpdateEnvelope>(payload) {
         Ok(depth_update) => {

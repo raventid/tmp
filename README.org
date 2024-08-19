@@ -35,7 +35,96 @@ In this implementation, multiple options have been considered, including:
 I chose the simplest implementation based on two B-Trees as a compromise between execution speed, implementation time, and complexity.
 
 Arithmetic:
-To simplify the implementation and move quickly, I use u64 for internal representation and f64 for the external API. Using u64 allows for simpler integral arithmetic without concerning ourselves with possible accumulated errors in floating-point arithmetic. Although it creates the possibility of introducing additional conversion errors, I considered it optimal for a POC (Proof of Concept) implementation. For a real implementation, I would invest more time to perform proper lossless decimal arithmetic.
+To simplify the implementation and move quickly, I use u64 for internal representation and f64 for the external API. Using u64 allows for simpler integral arithmetic without concerning ourselves with possible accumulated errors in floating-point arithmetic. Although it creates the possibility of introducing additional conversion errors, I considered it optimal for a POC (Proof of Concept) implementation. For a real implementation, I would invest more time to perform proper lossless decimal arithmetic. Also we are using the same shift for Quantity too, not only for the price, in case we implement matching - we should remember about it too (but we should move to decimals anyway).
 
 Websocket Connection:
 For the websocket connection to Binance, I use a Rust crate with Binance API implementation. It saves some boilerplate code and provides a convenient API on top of the Tokio runtime. To fine-tune performance or resilience (like reconnecting sockets, managing timeouts and network issues), it makes sense to hand-write everything from scratch, but due to time constraints, I opted for a compromise.
+
+Last Minute Idea:
+Use binary_heap to sort bids and asks in asc and decendant orders. Didn't have time to update tests and benchmark the idea.
+
+#+begin_src rust
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+
+#[derive(Debug)]
+pub struct OrderBook {
+    #[allow(dead_code)]
+    symbol: String,
+    bids: BinaryHeap<(Price, Quantity)>,
+    asks: BinaryHeap<Reverse<(Price, Quantity)>>,
+    last_update_id: u64,
+}
+
+impl OrderBook {
+    pub fn new(symbol: String) -> OrderBook {
+        OrderBook {
+            symbol,
+            bids: BinaryHeap::new(),
+            asks: BinaryHeap::new(),
+            last_update_id: 0,
+        }
+    }
+
+    pub fn update_book_ticker(&mut self, data: &binance_payloads::BookTickerUpdate) {
+        let bid_price = data.best_bid_price.to_u64() as Price;
+        let bid_qty = data.best_bid_quantity.to_u64() as Quantity;
+        let ask_price = data.best_ask_price.to_u64() as Price;
+        let ask_qty = data.best_ask_quantity.to_u64() as Quantity;
+
+        self.bids.push((bid_price, bid_qty));
+        self.asks.push(Reverse((ask_price, ask_qty)));
+    }
+
+    pub fn update_depth(&mut self, data: &binance_payloads::DepthUpdate) {
+        if data.last_update_id <= self.last_update_id {
+            return;
+        }
+
+        for (price, qty) in &data.bids {
+            let price_u64 = price.to_u64() as Price;
+            let qty_u64 = qty.to_u64() as Quantity;
+            if qty_u64 == 0 {
+                self.bids.retain(|&(p, _)| p != price_u64);
+            } else {
+                self.bids.push((price_u64, qty_u64));
+            }
+        }
+
+        for (price, qty) in &data.asks {
+            let price_u64 = price.to_u64() as Price;
+            let qty_u64 = qty.to_u64() as Quantity;
+            if qty_u64 == 0 {
+                self.asks.retain(|&Reverse((p, _))| p != price_u64);
+            } else {
+                self.asks.push(Reverse((price_u64, qty_u64)));
+            }
+        }
+
+        self.last_update_id = data.last_update_id;
+    }
+
+    fn get_best_bid_ask(&self) -> Option<((f64, f64), (f64, f64))> {
+        match (self.bids.peek(), self.asks.peek()) {
+            (Some(&(bid_price, bid_qty)), Some(&Reverse((ask_price, ask_qty)))) => Some((
+                (
+                    bid_price as f64 / CONVERSION_FACTOR,
+                    bid_qty as f64 / CONVERSION_FACTOR,
+                ),
+                (
+                    ask_price as f64 / CONVERSION_FACTOR,
+                    ask_qty as f64 / CONVERSION_FACTOR,
+                ),
+            )),
+            _ => None,
+        }
+    }
+
+    fn get_volume_at_price(&self, price: f64) -> f64 {
+        let price_u64 = price.to_u64() as Price;
+        let bid_volume = self.bids.iter().find(|&&(p, _)| p == price_u64).map(|&(_, q)| q).unwrap_or(0);
+        let ask_volume = self.asks.iter().find(|&&Reverse((p, _))| p == price_u64).map(|&Reverse((_, q))| q).unwrap_or(0);
+        (bid_volume + ask_volume) as f64 / CONVERSION_FACTOR
+    }
+}
+#+end_src
