@@ -7,6 +7,7 @@ use futures_util::StreamExt;
 
 mod binance_payloads;
 mod orderbook;
+mod orderbookv2;
 
 const INSTRUMENT: &str = "ETHUSDC";
 const LEVELS: u16 = 20;
