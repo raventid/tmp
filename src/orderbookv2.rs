@@ -43,6 +43,46 @@ impl OrderBookLevelInfos {
     }
 }
 
+struct Order {
+    order_id: OrderId,
+    price: Price,
+    quantity: Quantity,
+    initial_quantity: Quantity,
+    order_type: OrderType,
+    side: Side,
+}
+
+impl Order {
+    fn new(
+        order_id: OrderId,
+        price: Price,
+        quantity: Quantity,
+        order_type: OrderType,
+        side: Side,
+    ) -> Order {
+        Order {
+            order_id,
+            price,
+            quantity,
+            initial_quantity: quantity,
+            order_type,
+            side,
+        }
+    }
+
+    fn get_fill_quantity(&self) -> Quantity {
+        self.initial_quantity - self.quantity
+    }
+
+    fn fill(&mut self, quantity: Quantity) {
+        if quantity > self.quantity {
+            panic!("Cannot fill more than the order quantity");
+        }
+        
+        self.quantity -= quantity;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
