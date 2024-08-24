@@ -46,7 +46,7 @@ impl OrderBookLevelInfos {
 struct Order {
     order_id: OrderId,
     price: Price,
-    quantity: Quantity,
+    remaining_quantity: Quantity,
     initial_quantity: Quantity,
     order_type: OrderType,
     side: Side,
@@ -63,7 +63,7 @@ impl Order {
         Order {
             order_id,
             price,
-            quantity,
+            remaining_quantity: quantity,
             initial_quantity: quantity,
             order_type,
             side,
@@ -71,15 +71,15 @@ impl Order {
     }
 
     fn get_fill_quantity(&self) -> Quantity {
-        self.initial_quantity - self.quantity
+        self.initial_quantity - self.remaining_quantity
     }
 
     fn fill(&mut self, quantity: Quantity) {
-        if quantity > self.quantity {
+        if quantity > self.remaining_quantity {
             panic!("Cannot fill more than the order quantity");
         }
-        
-        self.quantity -= quantity;
+
+        self.remaining_quantity -= quantity;
     }
 }
 
