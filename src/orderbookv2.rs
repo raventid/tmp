@@ -101,4 +101,14 @@ mod tests {
         assert_eq!(orderbooklevelinfos.bids.len(), 0);
         assert_eq!(orderbooklevelinfos.asks.len(), 0);
     }
+
+    #[test]
+    fn test_filling_an_order() {
+        let initial_quantity = 100;
+        let mut order = Order::new(1, 10, initial_quantity, OrderType::GoodToCancel, Side::Buy);
+
+        order.fill(50);
+
+        assert_eq!(order.get_fill_quantity(), 50);
+    }
 }
