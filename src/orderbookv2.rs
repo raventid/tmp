@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 enum OrderType {
     GoodToCancel,
     FillAndKill,
@@ -83,6 +85,8 @@ impl Order {
     }
 }
 
+type OrderList = VecDeque<Box<Order>>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,5 +114,14 @@ mod tests {
         order.fill(50);
 
         assert_eq!(order.get_fill_quantity(), 50);
+    }
+
+    #[test]
+    fn test_orderlist_creation() {     
+        let mut orderlist = OrderList::new();
+        orderlist.push_back(Box::new(Order::new(1, 10, 100, OrderType::GoodToCancel, Side::Buy)));
+        orderlist.push_back(Box::new(Order::new(2, 20, 200, OrderType::GoodToCancel, Side::Buy)));
+
+        assert_eq!(orderlist.len(), 2);
     }
 }
