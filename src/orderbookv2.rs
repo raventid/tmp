@@ -87,6 +87,24 @@ impl Order {
 
 type OrderList = VecDeque<Box<Order>>;
 
+struct OrderModify {
+    order_id: OrderId,
+    side: Side,
+    price: Price,
+    quantity: Quantity,
+}
+
+impl OrderModify {
+    fn new(order_id: OrderId, side: Side, price: Price, quantity: Quantity) -> OrderModify {
+        OrderModify {
+            order_id,
+            side,
+            price,
+            quantity,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
