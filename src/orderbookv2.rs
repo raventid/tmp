@@ -105,6 +105,17 @@ impl OrderModify {
     }
 }
 
+struct TradeInfo {
+    order_id: OrderId,
+    price: Price,
+    quantity: Quantity,
+}
+
+struct Trade {
+    bid_trade: TradeInfo,
+    ask_trade: TradeInfo,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
