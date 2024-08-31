@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::{btree_map, HashMap, VecDeque}, rc::Rc};
 
 enum OrderType {
     GoodToCancel,
@@ -85,7 +85,7 @@ impl Order {
     }
 }
 
-type OrderList = VecDeque<Box<Order>>;
+type OrderList = VecDeque<Rc<Order>>;
 
 struct OrderModify {
     order_id: OrderId,
@@ -114,6 +114,13 @@ struct TradeInfo {
 struct Trade {
     bid_trade: TradeInfo,
     ask_trade: TradeInfo,
+}
+
+
+struct OrderBook {
+    bids: btree_map::BTreeMap<std::cmp::Reverse<Price>, OrderList>,
+    asks: btree_map::BTreeMap<Price, OrderList>,
+    orders: HashMap<Price, Rc<Order>>
 }
 
 #[cfg(test)]
@@ -148,8 +155,8 @@ mod tests {
     #[test]
     fn test_orderlist_creation() {     
         let mut orderlist = OrderList::new();
-        orderlist.push_back(Box::new(Order::new(1, 10, 100, OrderType::GoodToCancel, Side::Buy)));
-        orderlist.push_back(Box::new(Order::new(2, 20, 200, OrderType::GoodToCancel, Side::Buy)));
+        orderlist.push_back(Rc::new(Order::new(1, 10, 100, OrderType::GoodToCancel, Side::Buy)));
+        orderlist.push_back(Rc::new(Order::new(2, 20, 200, OrderType::GoodToCancel, Side::Buy)));
 
         assert_eq!(orderlist.len(), 2);
     }
