@@ -123,6 +123,37 @@ struct OrderBook {
     orders: HashMap<Price, Rc<Order>>
 }
 
+impl OrderBook {
+    fn new() -> OrderBook {
+        OrderBook {
+            bids: btree_map::BTreeMap::new(),
+            asks: btree_map::BTreeMap::new(),
+            orders: HashMap::new()
+        }
+    }
+    
+    fn can_match(&self, price: Price, side: Side) -> bool {
+        match side {
+            Side::Buy => { 
+                if self.asks.is_empty() {
+                    return false;
+                }
+
+                let best_ask = self.asks.iter().next().expect("No ask found | unreachable state");
+                price >= *best_ask.0
+            }
+            Side::Sell => {
+                if self.bids.is_empty() {
+                    return false;
+                }
+
+                let best_bid = self.bids.iter().next().expect("No bid found | unreachable state");
+                price <= best_bid.0.0
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,5 +190,18 @@ mod tests {
         orderlist.push_back(Rc::new(Order::new(2, 20, 200, OrderType::GoodToCancel, Side::Buy)));
 
         assert_eq!(orderlist.len(), 2);
+    }
+
+    #[test]
+    fn test_can_match() {
+        let mut orderbook = OrderBook::new();
+
+        orderbook.bids.insert(std::cmp::Reverse(10), OrderList::new());
+        orderbook.asks.insert(20, OrderList::new());
+
+        assert_eq!(orderbook.can_match(10, Side::Buy), false);
+        assert_eq!(orderbook.can_match(20, Side::Buy), true);
+        assert_eq!(orderbook.can_match(10, Side::Sell), true);
+        assert_eq!(orderbook.can_match(20, Side::Sell), false);
     }
 }
