@@ -131,7 +131,7 @@ impl OrderBook {
             orders: HashMap::new()
         }
     }
-    
+
     fn can_match(&self, price: Price, side: Side) -> bool {
         match side {
             Side::Buy => { 
@@ -151,6 +151,37 @@ impl OrderBook {
                 price <= best_bid.0.0
             }
         }
+    }
+
+    fn match_orders(&mut self) -> Vec<Trade> {
+        let mut bid_trade = TradeInfo {
+            order_id: 0,
+            price: 0,
+            quantity: 0,
+        };
+
+        let mut ask_trade = TradeInfo {
+            order_id: 0,
+            price: 0,
+            quantity: 0,
+        };
+
+        loop {
+            if self.bids.is_empty() || self.asks.is_empty() {
+                break;
+            }
+
+            let best_bid = self.bids.iter().next().expect("No bid found | unreachable state");
+            let best_ask = self.asks.iter().next().expect("No ask found | unreachable state");
+
+            // Nothing to match in orderbook
+            if best_bid.0.0 < *best_ask.0 {
+                break;
+            }
+        }
+
+        // just a dummy implementation to make the code compile
+        vec![]
     }
 }
 
