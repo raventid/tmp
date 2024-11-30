@@ -1,5 +1,10 @@
-use std::{collections::{btree_map, HashMap, VecDeque}, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{btree_map, HashMap, VecDeque},
+    rc::Rc,
+};
 
+#[derive(Debug, PartialEq, Eq)]
 enum OrderType {
     GoodToCancel,
     FillAndKill,
@@ -83,9 +88,14 @@ impl Order {
 
         self.remaining_quantity -= quantity;
     }
+
+    fn is_filled(&self) -> bool {
+        self.remaining_quantity == 0
+    }
 }
 
-type OrderList = VecDeque<Rc<Order>>;
+type OrderPointer = Rc<RefCell<Order>>;
+type OrderList = VecDeque<OrderPointer>;
 
 struct OrderModify {
     order_id: OrderId,
@@ -116,11 +126,10 @@ struct Trade {
     ask_trade: TradeInfo,
 }
 
-
 struct OrderBook {
     bids: btree_map::BTreeMap<std::cmp::Reverse<Price>, OrderList>,
     asks: btree_map::BTreeMap<Price, OrderList>,
-    orders: HashMap<Price, Rc<Order>>
+    orders: HashMap<Price, OrderPointer>,
 }
 
 impl OrderBook {
@@ -128,18 +137,26 @@ impl OrderBook {
         OrderBook {
             bids: btree_map::BTreeMap::new(),
             asks: btree_map::BTreeMap::new(),
-            orders: HashMap::new()
+            orders: HashMap::new(),
         }
+    }
+
+    fn cancel_order(&self, order_id: OrderId) {
+        // TODO: cancel the order logic
     }
 
     fn can_match(&self, price: Price, side: Side) -> bool {
         match side {
-            Side::Buy => { 
+            Side::Buy => {
                 if self.asks.is_empty() {
                     return false;
                 }
 
-                let best_ask = self.asks.iter().next().expect("No ask found | unreachable state");
+                let best_ask = self
+                    .asks
+                    .iter()
+                    .next()
+                    .expect("No ask found | unreachable state");
                 price >= *best_ask.0
             }
             Side::Sell => {
@@ -147,36 +164,133 @@ impl OrderBook {
                     return false;
                 }
 
-                let best_bid = self.bids.iter().next().expect("No bid found | unreachable state");
-                price <= best_bid.0.0
+                let best_bid = self
+                    .bids
+                    .iter()
+                    .next()
+                    .expect("No bid found | unreachable state");
+                price <= best_bid.0 .0
             }
         }
     }
 
     fn match_orders(&mut self) -> Vec<Trade> {
-        let mut bid_trade = TradeInfo {
-            order_id: 0,
-            price: 0,
-            quantity: 0,
-        };
-
-        let mut ask_trade = TradeInfo {
-            order_id: 0,
-            price: 0,
-            quantity: 0,
-        };
+        let mut trades = Vec::new();
 
         loop {
             if self.bids.is_empty() || self.asks.is_empty() {
                 break;
             }
 
-            let best_bid = self.bids.iter().next().expect("No bid found | unreachable state");
-            let best_ask = self.asks.iter().next().expect("No ask found | unreachable state");
+            let (bids_level_to_remove, asks_level_to_remove) = {
+                let bids = self
+                    .bids
+                    .iter_mut()
+                    .next()
+                    .expect("No bid found | unreachable state");
+                let asks = self
+                    .asks
+                    .iter_mut()
+                    .next()
+                    .expect("No ask found | unreachable state");
 
-            // Nothing to match in orderbook
-            if best_bid.0.0 < *best_ask.0 {
-                break;
+                // Nothing to match in orderbook
+                if bids.0 .0 < *asks.0 {
+                    break;
+                }
+
+                // internal loop to match orders, will be stopped when bids or asks are empty
+                while !bids.1.is_empty() && !asks.1.is_empty() {
+                    let (bid_is_filled, ask_is_filled, quantity) = {
+                        let mut bid = bids.1.front().unwrap().borrow_mut();
+                        let mut ask = asks.1.front().unwrap().borrow_mut();
+                        let quantity =
+                            std::cmp::min(bid.remaining_quantity, ask.remaining_quantity);
+
+                        bid.fill(quantity);
+                        ask.fill(quantity);
+
+                        (bid.is_filled(), ask.is_filled(), quantity)
+                    };
+
+                    if bid_is_filled {
+                        bids.1.pop_front();
+                        self.orders.remove(&bids.0 .0);
+                    }
+
+                    if ask_is_filled {
+                        asks.1.pop_front();
+                        self.orders.remove(&asks.0);
+                    }
+
+                    trades.push(Trade {
+                        bid_trade: TradeInfo {
+                            order_id: bids.1.front().unwrap().borrow().order_id,
+                            price: bids.0 .0,
+                            quantity,
+                        },
+                        ask_trade: TradeInfo {
+                            order_id: asks.1.front().unwrap().borrow().order_id,
+                            price: *asks.0,
+                            quantity,
+                        },
+                    });
+                }
+
+                // remove the level if it is empty
+                let bids_level_to_remove = if bids.1.is_empty() {
+                    Some(bids.0 .0)
+                } else {
+                    None
+                };
+
+                let asks_level_to_remove = if asks.1.is_empty() {
+                    Some(*asks.0)
+                } else {
+                    None
+                };
+
+                (bids_level_to_remove, asks_level_to_remove)
+            };
+
+            if let Some(price) = bids_level_to_remove {
+                self.bids.remove(&std::cmp::Reverse(price));
+            }
+
+            if let Some(price) = asks_level_to_remove {
+                self.asks.remove(&price);
+            }
+
+            if !self.bids.is_empty() {
+                let need_cancelation = {
+                    let (_, bids) = self.bids.iter_mut().next().unwrap();
+                    let first_order = bids.front().unwrap().borrow();
+                    if first_order.order_type == OrderType::FillAndKill {
+                        Some(first_order.order_id)
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(order_id) = need_cancelation {
+                    self.cancel_order(order_id);
+                }
+            }
+
+            if !self.asks.is_empty() {
+                let need_cancelation = {
+                    let (_, asks) = self.asks.iter_mut().next().unwrap();
+                    let first_order = asks.front().unwrap().borrow();
+                    if first_order.order_type == OrderType::FillAndKill {
+                        Some(first_order.order_id)
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(order_id) = need_cancelation {
+                    self.cancel_order(order_id);
+                }
             }
         }
 
@@ -215,10 +329,22 @@ mod tests {
     }
 
     #[test]
-    fn test_orderlist_creation() {     
+    fn test_orderlist_creation() {
         let mut orderlist = OrderList::new();
-        orderlist.push_back(Rc::new(Order::new(1, 10, 100, OrderType::GoodToCancel, Side::Buy)));
-        orderlist.push_back(Rc::new(Order::new(2, 20, 200, OrderType::GoodToCancel, Side::Buy)));
+        orderlist.push_back(Rc::new(RefCell::new(Order::new(
+            1,
+            10,
+            100,
+            OrderType::GoodToCancel,
+            Side::Buy,
+        ))));
+        orderlist.push_back(Rc::new(RefCell::new(Order::new(
+            2,
+            20,
+            200,
+            OrderType::GoodToCancel,
+            Side::Buy,
+        ))));
 
         assert_eq!(orderlist.len(), 2);
     }
@@ -227,7 +353,9 @@ mod tests {
     fn test_can_match() {
         let mut orderbook = OrderBook::new();
 
-        orderbook.bids.insert(std::cmp::Reverse(10), OrderList::new());
+        orderbook
+            .bids
+            .insert(std::cmp::Reverse(10), OrderList::new());
         orderbook.asks.insert(20, OrderList::new());
 
         assert_eq!(orderbook.can_match(10, Side::Buy), false);
