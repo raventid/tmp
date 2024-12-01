@@ -4,12 +4,25 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+// FOK type of order
+// https://en.wikipedia.org/wiki/Fill_or_kill
+
+// List of possible orders
+// https://www.cmegroup.com/tools-information/webhelp/autocert-ilink-2x/Content/Definitions.html
+
+// Fill and Kill (FAK) Order - FAK orders are immediately executed against resting orders. Any quantity that remains unfilled is cancelled.
+// Fill or Kill (FOK) Order - FOK orders are cancelled if not immediately filled for the total quantity at the specified price or better.
+// Give Up - An order to be given to another member firm in the clearing system, an allocation. An order executed by clearing firm A and given to clearing firm B where it will be cleared and processed. Give up order indicator is "GU" populated in the F-Ex field.
+// Good Till Cancel (GTC) Order - GTC orders remain open until they are completely executed or cancelled.
+// Good till Date (GTD) Order - GTD orders expire either at a specified date or when the security expires.
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum OrderType {
     GoodToCancel,
     FillAndKill,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Side {
     Buy,
     Sell,
@@ -50,6 +63,7 @@ impl OrderBookLevelInfos {
     }
 }
 
+#[derive(Debug, Clone)]
 struct Order {
     order_id: OrderId,
     price: Price,
@@ -129,7 +143,7 @@ struct Trade {
 struct OrderBook {
     bids: btree_map::BTreeMap<std::cmp::Reverse<Price>, OrderList>,
     asks: btree_map::BTreeMap<Price, OrderList>,
-    orders: HashMap<Price, OrderPointer>,
+    orders: HashMap<OrderId, OrderPointer>,
 }
 
 impl OrderBook {
@@ -141,8 +155,46 @@ impl OrderBook {
         }
     }
 
-    fn cancel_order(&self, order_id: OrderId) {
-        // TODO: cancel the order logic
+    fn cancel_order(&mut self, order_id: OrderId) {
+        // FIXME: This is very error prone impelmentation,
+        // we should not do this conversion here and we should not panic!
+        if !self.orders.contains_key(&order_id) {
+            panic!("Order not found");
+        }
+
+        // Find the order first
+        let order_price = self
+            .orders
+            .iter()
+            .find(|(_, order)| order.borrow().order_id == order_id)
+            .map(|(_, order)| order.borrow().price);
+
+        if let Some(price) = order_price {
+            let order_pointer = self.orders.remove(&order_id).unwrap();
+            let order = order_pointer.borrow();
+
+            match order.side {
+                Side::Sell => {
+                    if let Some(orders) = self.asks.get_mut(&price) {
+                        orders.retain(|o| o.borrow().order_id != order_id);
+                        // Remove the price level if no orders left
+                        if orders.is_empty() {
+                            self.asks.remove(&price);
+                        }
+                    }
+                }
+                Side::Buy => {
+                    let reverse_price = std::cmp::Reverse(price);
+                    if let Some(orders) = self.bids.get_mut(&reverse_price) {
+                        orders.retain(|o| o.borrow().order_id != order_id);
+                        // Remove the price level if no orders left
+                        if orders.is_empty() {
+                            self.bids.remove(&reverse_price);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn can_match(&self, price: Price, side: Side) -> bool {
@@ -174,6 +226,16 @@ impl OrderBook {
         }
     }
 
+    fn match_order(&mut self, order_modify: OrderModify) -> Vec<Trades> {
+        if (!self.orders.contains_key(&order_modify.order_id)) {
+            return vec![];
+        }
+
+        let order = self.orders.get(&order_modify.order_id).unwrap();
+        self.cancel_order(order.borrow().order_id);
+        self.add_order(order.borrow().clone())
+    }
+
     fn match_orders(&mut self) -> Vec<Trade> {
         let mut trades = Vec::new();
 
@@ -201,7 +263,7 @@ impl OrderBook {
 
                 // internal loop to match orders, will be stopped when bids or asks are empty
                 while !bids.1.is_empty() && !asks.1.is_empty() {
-                    let (bid_is_filled, ask_is_filled, quantity) = {
+                    let ((bid_is_filled, bid_order_id), (ask_is_filled, ask_order_id), quantity) = {
                         let mut bid = bids.1.front().unwrap().borrow_mut();
                         let mut ask = asks.1.front().unwrap().borrow_mut();
                         let quantity =
@@ -210,17 +272,21 @@ impl OrderBook {
                         bid.fill(quantity);
                         ask.fill(quantity);
 
-                        (bid.is_filled(), ask.is_filled(), quantity)
+                        (
+                            (bid.is_filled(), bid.order_id),
+                            (ask.is_filled(), ask.order_id),
+                            quantity,
+                        )
                     };
 
                     if bid_is_filled {
                         bids.1.pop_front();
-                        self.orders.remove(&bids.0 .0);
+                        self.orders.remove(&bid_order_id);
                     }
 
                     if ask_is_filled {
                         asks.1.pop_front();
-                        self.orders.remove(&asks.0);
+                        self.orders.remove(&ask_order_id);
                     }
 
                     trades.push(Trade {
@@ -295,7 +361,71 @@ impl OrderBook {
         }
 
         // just a dummy implementation to make the code compile
-        vec![]
+        return trades;
+    }
+
+    pub fn add_order(&mut self, order: Order) -> Vec<Trade> {
+        if self.orders.contains_key(&order.order_id) {
+            // this is too much, but as an initial implementation, we can just panic
+            println!("Order already exists");
+            return vec![];
+        }
+
+        if order.order_type == OrderType::FillAndKill {
+            if !self.can_match(order.price, order.side) {
+                println!("Cannot match this Fill and Kill order");
+                return vec![];
+            }
+        }
+
+        let side = order.side;
+        let price = order.price;
+        let order_pointer = Rc::new(RefCell::new(order.clone()));
+
+        match side {
+            Side::Buy => {
+                self.bids
+                    .entry(std::cmp::Reverse(price))
+                    .or_insert(OrderList::new())
+                    .push_back(Rc::clone(&order_pointer));
+            }
+            Side::Sell => {
+                self.asks
+                    .entry(price)
+                    .or_insert(OrderList::new())
+                    .push_back(Rc::clone(&order_pointer));
+            }
+        }
+
+        self.orders.insert(order.order_id, order_pointer);
+
+        self.match_orders()
+    }
+
+    pub fn orderbook_size(&self) -> usize {
+        self.orders.len()
+    }
+
+    pub fn get_orderbook_level_infos(&self) -> OrderBookLevelInfos {
+        let bids = self
+            .bids
+            .iter()
+            .map(|(price, orders)| LevelInfo {
+                price: price.0,
+                quantity: orders.iter().map(|o| o.borrow().remaining_quantity).sum(),
+            })
+            .collect();
+
+        let asks = self
+            .asks
+            .iter()
+            .map(|(price, orders)| LevelInfo {
+                price: *price,
+                quantity: orders.iter().map(|o| o.borrow().remaining_quantity).sum(),
+            })
+            .collect();
+
+        OrderBookLevelInfos::new(bids, asks)
     }
 }
 
@@ -362,5 +492,26 @@ mod tests {
         assert_eq!(orderbook.can_match(20, Side::Buy), true);
         assert_eq!(orderbook.can_match(10, Side::Sell), true);
         assert_eq!(orderbook.can_match(20, Side::Sell), false);
+    }
+
+    #[test]
+    fn test_add_order_to_orderbook() {
+        let mut orderbook = OrderBook::new();
+        let order = Order::new(1, 10, 100, OrderType::GoodToCancel, Side::Buy);
+
+        orderbook.add_order(order);
+
+        assert_eq!(orderbook.orders.len(), 1);
+    }
+
+    #[test]
+    fn test_cancel_order() {
+        let mut orderbook = OrderBook::new();
+        let order = Order::new(1, 10, 100, OrderType::GoodToCancel, Side::Buy);
+
+        orderbook.add_order(order);
+        orderbook.cancel_order(1);
+
+        assert_eq!(orderbook.orders.len(), 0);
     }
 }
