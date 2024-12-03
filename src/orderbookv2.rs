@@ -427,6 +427,16 @@ impl OrderBook {
 
         OrderBookLevelInfos::new(bids, asks)
     }
+
+    pub fn get_best_bid_ask(&self) -> Option<(Price, Price)> {
+        let best_bid = self.bids.iter().next().map(|(price, _)| price.0);
+        let best_ask = self.asks.iter().next().map(|(price, _)| *price);
+
+        match (best_bid, best_ask) {
+            (Some(best_bid), Some(best_ask)) => Some((best_bid, best_ask)),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
