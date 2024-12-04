@@ -437,6 +437,12 @@ impl OrderBook {
             _ => None,
         }
     }
+
+    // TODO: Not sure if we should only count bids here (maybe we should count asks too?)
+    pub fn get_volume_at_price(&self, price: Price) -> Quantity {
+        let bids = self.bids.get(&std::cmp::Reverse(price)).unwrap();
+        bids.iter().fold(0, |total_quantity, bid| bid.borrow().remaining_quantity + total_quantity)
+    }
 }
 
 #[cfg(test)]
