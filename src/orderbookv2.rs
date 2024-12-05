@@ -402,6 +402,8 @@ impl OrderBook {
         self.match_orders()
     }
 
+    // Analytical methods to get some information about orderbook state
+
     pub fn orderbook_size(&self) -> usize {
         self.orders.len()
     }
@@ -441,7 +443,9 @@ impl OrderBook {
     // TODO: Not sure if we should only count bids here (maybe we should count asks too?)
     pub fn get_volume_at_price(&self, price: Price) -> Quantity {
         let bids = self.bids.get(&std::cmp::Reverse(price)).unwrap();
-        bids.iter().fold(0, |total_quantity, bid| bid.borrow().remaining_quantity + total_quantity)
+        bids.iter().fold(0, |total_quantity, bid| {
+            bid.borrow().remaining_quantity + total_quantity
+        })
     }
 }
 
