@@ -1,3 +1,5 @@
+/// This implementation supports a more detailed view on orders and order management
+/// In this implementation we support
 use std::{
     cell::RefCell,
     collections::{btree_map, HashMap, VecDeque},
@@ -32,6 +34,7 @@ type Price = i32;
 type Quantity = u32;
 type OrderId = u64;
 
+#[derive(Debug)]
 struct LevelInfo {
     price: Price,
     quantity: Quantity,
