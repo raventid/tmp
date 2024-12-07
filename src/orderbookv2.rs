@@ -40,6 +40,7 @@ struct LevelInfo {
     quantity: Quantity,
 }
 
+#[derive(Debug)]
 struct OrderBookLevelInfos {
     bids: Vec<LevelInfo>,
     asks: Vec<LevelInfo>,
