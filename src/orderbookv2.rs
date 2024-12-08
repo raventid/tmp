@@ -230,14 +230,14 @@ impl OrderBook {
         }
     }
 
-    fn match_order(&mut self, order_modify: OrderModify) -> Vec<Trades> {
-        if (!self.orders.contains_key(&order_modify.order_id)) {
+    fn match_order(&mut self, order_modify: OrderModify) -> Vec<Trade> {
+        if !self.orders.contains_key(&order_modify.order_id) {
             return vec![];
         }
-
-        let order = self.orders.get(&order_modify.order_id).unwrap();
-        self.cancel_order(order.borrow().order_id);
-        self.add_order(order.borrow().clone())
+        let order_pointer = self.orders.get(&order_modify.order_id).unwrap().clone();
+        let order = order_pointer.borrow();
+        self.cancel_order(order.order_id);
+        self.add_order(order.clone())
     }
 
     fn match_orders(&mut self) -> Vec<Trade> {
