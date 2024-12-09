@@ -115,6 +115,7 @@ impl Order {
 type OrderPointer = Rc<RefCell<Order>>;
 type OrderList = VecDeque<OrderPointer>;
 
+#[derive(Debug)]
 struct OrderModify {
     order_id: OrderId,
     side: Side,
