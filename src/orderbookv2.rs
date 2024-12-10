@@ -134,6 +134,7 @@ impl OrderModify {
     }
 }
 
+#[derive(Debug)]
 struct TradeInfo {
     order_id: OrderId,
     price: Price,
