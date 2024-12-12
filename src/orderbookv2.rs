@@ -141,6 +141,7 @@ struct TradeInfo {
     quantity: Quantity,
 }
 
+#[derive(Debug)]
 struct Trade {
     bid_trade: TradeInfo,
     ask_trade: TradeInfo,
