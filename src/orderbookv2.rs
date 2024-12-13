@@ -134,14 +134,14 @@ impl OrderModify {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TradeInfo {
     order_id: OrderId,
     price: Price,
     quantity: Quantity,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Trade {
     bid_trade: TradeInfo,
     ask_trade: TradeInfo,
