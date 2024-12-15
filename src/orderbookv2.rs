@@ -147,6 +147,7 @@ struct Trade {
     ask_trade: TradeInfo,
 }
 
+#[derive(Debug)]
 struct OrderBook {
     bids: btree_map::BTreeMap<std::cmp::Reverse<Price>, OrderList>,
     asks: btree_map::BTreeMap<Price, OrderList>,
